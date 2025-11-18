@@ -1,0 +1,184 @@
+let deck = [];
+let playerHand = [];
+let aiHand = [];
+let communityCards = [];
+let pot = 0;
+let currentBet = 0;
+let playerChips = 1000;
+let aiChips = 1000;
+let playerAction = '';
+let aiAction = '';
+let aiFolded = false;
+
+// AI personality: 0 = passive, 1 = balanced, 2 = aggressive
+let aiPersonality = Math.floor(Math.random() * 3);
+
+document.getElementById('new-game').addEventListener('click', playGame);
+document.getElementById('bet-button').addEventListener('click', playerBet);
+document.getElementById('call-button').addEventListener('click', playerCall);
+document.getElementById('fold-button').addEventListener('click', playerFold);
+
+function createDeck() {
+    const suits = ['♠', '♥', '♦', '♣'];
+    const values = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+    deck = [];
+    for (let suit of suits) {
+        for (let value of values) {
+            deck.push(value + suit);
+        }
+    }
+}
+
+function shuffleDeck() {
+    for (let i = deck.length -1; i >0; i--) {
+        const j = Math.floor(Math.random() * (i +1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+}
+
+function dealHands() {
+    playerHand = [deck.pop(), deck.pop()];
+    aiHand = [deck.pop(), deck.pop()];
+}
+
+function dealCommunityCards() {
+    communityCards = [deck.pop(), deck.pop(), deck.pop(), deck.pop(), deck.pop()];
+}
+
+function displayCards() {
+    document.getElementById('player-hand').innerText = playerHand.join(', ');
+    document.getElementById('community-cards').innerText = communityCards.join(', ');
+    document.getElementById('ai-hand').innerText = aiFolded ? 'Folded' : '??';
+}
+
+function updatePotAndChips() {
+    document.getElementById('player-chips').innerText = playerChips;
+    document.getElementById('ai-chips').innerText = aiChips;
+    document.getElementById('pot').innerText = pot;
+}
+
+function playerBet() {
+    const betAmount = parseInt(document.getElementById('bet-amount').value);
+    if (!betAmount || betAmount > playerChips) {
+        alert('Invalid bet amount');
+        return;
+    }
+    playerChips -= betAmount;
+    pot += betAmount;
+    currentBet = betAmount;
+    playerAction = 'bet';
+    updatePotAndChips();
+    aiTurn();
+}
+
+function playerCall() {
+    playerChips -= currentBet;
+    pot += currentBet;
+    playerAction = 'call';
+    updatePotAndChips();
+    aiTurn();
+}
+
+function playerFold() {
+    playerAction = 'fold';
+    aiTurn();
+}
+
+function evaluateHand(hand, community) {
+    const values = hand.map(c => c.slice(0, -1));
+    const highCardValue = values.includes('A') ? 14 :
+                          values.includes('K') ? 13 :
+                          values.includes('Q') ? 12 :
+                          values.includes('J') ? 11 :
+                          parseInt(values[0]) || 0;
+    let strength = 0;
+    if (values[0] === values[1]) strength += 50;
+    if (highCardValue >= 11) strength += 20;
+    strength += Math.floor(Math.random() * 20);
+    return strength;
+}
+
+function aiTurn() {
+    if (aiFolded) return;
+
+    const handStrength = evaluateHand(aiHand, communityCards);
+    let action = '';
+    let aiBetAmount = 0;
+
+    let foldThreshold = 30;
+    let callThreshold = 60;
+    let bluffChance = 0.05;
+
+    if (aiPersonality === 0) {
+        foldThreshold += 10; callThreshold += 10;
+    } else if (aiPersonality === 2) {
+        foldThreshold -= 10; callThreshold -= 10; bluffChance = 0.15;
+    }
+
+    if (Math.random() < bluffChance) {
+        action = 'bet';
+        aiBetAmount = Math.floor(Math.random() * 100) + 50;
+        if (aiBetAmount > aiChips) aiBetAmount = aiChips;
+        aiChips -= aiBetAmount; pot += aiBetAmount; currentBet = aiBetAmount;
+        alert(`AI bluffs and bets ${aiBetAmount}`);
+    } else if (handStrength < foldThreshold) {
+        action = 'fold';
+        aiFolded = true;
+        alert('AI folds!');
+    } else if (handStrength < callThreshold) {
+        action = 'call';
+        aiChips -= currentBet; pot += currentBet;
+        alert('AI calls');
+    } else {
+        action = 'bet';
+        aiBetAmount = Math.floor(handStrength * 2);
+        if (aiBetAmount > aiChips) aiBetAmount = aiChips;
+        aiChips -= aiBetAmount; pot += aiBetAmount; currentBet = aiBetAmount;
+        alert(`AI bets ${aiBetAmount}`);
+    }
+
+    aiAction = action;
+    updatePotAndChips();
+    nextRound();
+}
+
+function nextRound() {
+    if (playerAction === 'fold') {
+        document.getElementById('winner').innerText = 'You folded! AI wins!';
+        displayCards();
+        return;
+    }
+    if (aiAction === 'fold') {
+        document.getElementById('winner').innerText = 'AI folded! You win!';
+        displayCards();
+        return;
+    }
+    // Simplified winner: random for now
+    const playerScore = evaluateHand(playerHand, communityCards);
+    const aiScore = evaluateHand(aiHand, communityCards);
+    if (playerScore > aiScore) {
+        playerChips += pot;
+        document.getElementById('winner').innerText = 'You win the pot!';
+    } else if (aiScore > playerScore) {
+        aiChips += pot;
+        document.getElementById('winner').innerText = 'AI wins the pot!';
+    } else {
+        playerChips += pot/2;
+        aiChips += pot/2;
+        document.getElementById('winner').innerText = 'It\'s a tie!';
+    }
+    displayCards();
+    pot = 0; currentBet = 0;
+    updatePotAndChips();
+}
+
+function playGame() {
+    createDeck();
+    shuffleDeck();
+    dealHands();
+    dealCommunityCards();
+    displayCards();
+    pot = 0; currentBet = 0; aiFolded = false;
+    document.getElementById('winner').innerText = '';
+    updatePotAndChips();
+}
